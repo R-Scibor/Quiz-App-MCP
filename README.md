@@ -76,3 +76,18 @@ These tools fetch the latest quiz document, apply the change in-memory, validate
 - `update_grading(test_id, question_id, gradingCriteria=None, maxPoints=None, dry_run=False)`: Patch grading criteria and max points.
 
 *Note: Question write tools currently use a compose loop (export -> patch -> validate -> import). Direct question-level PATCH endpoints may replace this in future versions.*
+
+## HTTP Transport & Docker
+
+You can run the server with Streamable HTTP transport:
+
+```bash
+quiz-authoring-mcp --http --host 0.0.0.0 --port 8080
+```
+
+Or using Docker:
+
+```bash
+docker build -t quiz-authoring-mcp .
+docker run -p 8080:8080 -e QUIZ_APP_URL="https://host.docker.internal:8050" -e QUIZ_APP_TOKEN="<staff-token>" quiz-authoring-mcp
+```

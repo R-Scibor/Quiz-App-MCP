@@ -314,8 +314,9 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8080)
     args = parser.parse_args()
     if args.http:
-        raise SystemExit("HTTP transport is not enabled yet; use stdio.")
-    mcp.run(transport="stdio")
+        mcp.run(transport="streamable-http", host=args.host, port=args.port)
+    else:
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":
