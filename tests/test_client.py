@@ -116,3 +116,24 @@ def test_schema_and_instructions(client):
     )
     assert client.get_schema()["schema_version"] == 1
     assert client.get_instructions()["markdown"] == "# hi"
+
+
+@respx.mock
+def test_create_question_posts_to_test(client):
+    tid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    route = respx.post(f"{API}/tests/{tid}/questions/").mock(
+        return_value=Response(201, json={"applied": True, "question": {"id": 2}})
+    )
+    body = client.create_question(tid, {"questionText": "Q", "type": "open-text", "gradingCriteria": "c", "maxPoints": 1})
+    assert body["question"]["id"] == 2
+    assert route.calls.last.request.headers["Authorization"] == "Token secret-token"
+
+
+@respx.mock
+def test_remove_question_dry_run(client):
+    qid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    route = respx.delete(f"{API}/questions/{qid}/").mock(
+        return_value=Response(200, json={"dry_run": True, "deleted": False})
+    )
+    client.remove_question(qid, dry_run=True)
+    assert route.calls.last.request.url.params["dry_run"] == "true"

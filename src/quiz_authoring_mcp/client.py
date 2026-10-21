@@ -61,3 +61,19 @@ class AuthoringClient:
             payload["test_id"] = test_id
         params = {"dry_run": "true"} if dry_run else None
         return self._parse(self._http.post("/import/", json=payload, params=params))
+
+    def create_question(self, test_id: str, question: dict, dry_run: bool = False) -> dict:
+        params = {"dry_run": "true"} if dry_run else None
+        return self._parse(
+            self._http.post(f"/tests/{test_id}/questions/", json=question, params=params)
+        )
+
+    def patch_question(self, question_id: str, fields: dict, dry_run: bool = False) -> dict:
+        params = {"dry_run": "true"} if dry_run else None
+        return self._parse(
+            self._http.patch(f"/questions/{question_id}/", json=fields, params=params)
+        )
+
+    def remove_question(self, question_id: str, dry_run: bool = False) -> dict:
+        params = {"dry_run": "true"} if dry_run else None
+        return self._parse(self._http.delete(f"/questions/{question_id}/", params=params))
