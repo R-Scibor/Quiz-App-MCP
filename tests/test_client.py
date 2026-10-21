@@ -137,3 +137,37 @@ def test_remove_question_dry_run(client):
     )
     client.remove_question(qid, dry_run=True)
     assert route.calls.last.request.url.params["dry_run"] == "true"
+
+
+@respx.mock
+def test_search_and_batch_and_tags(client):
+    tid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    search = respx.get(f"{API}/search/").mock(
+        return_value=Response(200, json={"tests": [], "questions": []})
+    )
+    client.search_catalog("dns", test_id=tid, tag="dns", limit=5)
+    sent = search.calls.last.request.url.params
+    assert sent["q"] == "dns"
+    assert sent["test_id"] == tid
+    assert sent["tag"] == "dns"
+    assert search.calls.last.request.headers["Authorization"] == "Token secret-token"
+
+    batch = respx.post(f"{API}/tests/{tid}/questions/batch/").mock(
+        return_value=Response(201, json={"applied": True, "questions": []})
+    )
+    client.add_questions(tid, [{"questionText": "Q"}])
+    assert json.loads(batch.calls.last.request.content) == {"questions": [{"questionText": "Q"}]}
+
+    respx.get(f"{API}/tags/").mock(return_value=Response(200, json=[{"name": "dns", "question_count": 2}]))
+    assert client.list_tags()[0]["name"] == "dns"
+
+
+@respx.mock
+def test_report_status_patch(client):
+    rid = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+    route = respx.patch(f"{API}/reports/{rid}/").mock(
+        return_value=Response(200, json={"status": "RESOLVED"})
+    )
+    client.set_report_status(rid, "RESOLVED", resolution_note="Fixed the key.")
+    body = json.loads(route.calls.last.request.content)
+    assert body == {"status": "RESOLVED", "resolution_note": "Fixed the key."}

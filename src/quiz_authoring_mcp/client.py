@@ -77,3 +77,51 @@ class AuthoringClient:
     def remove_question(self, question_id: str, dry_run: bool = False) -> dict:
         params = {"dry_run": "true"} if dry_run else None
         return self._parse(self._http.delete(f"/questions/{question_id}/", params=params))
+
+    def search_catalog(
+        self,
+        q: str,
+        test_id: str | None = None,
+        tag: str | None = None,
+        limit: int | None = None,
+    ) -> dict:
+        params: dict[str, Any] = {"q": q}
+        if test_id:
+            params["test_id"] = test_id
+        if tag:
+            params["tag"] = tag
+        if limit is not None:
+            params["limit"] = str(limit)
+        return self._parse(self._http.get("/search/", params=params))
+
+    def add_questions(self, test_id: str, questions: list, dry_run: bool = False) -> dict:
+        params = {"dry_run": "true"} if dry_run else None
+        return self._parse(
+            self._http.post(
+                f"/tests/{test_id}/questions/batch/",
+                json={"questions": questions},
+                params=params,
+            )
+        )
+
+    def list_tags(self) -> list:
+        return self._parse(self._http.get("/tags/"))
+
+    def list_reports(self, status: str | None = None, limit: int | None = None) -> list:
+        params: dict[str, Any] = {}
+        if status:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = str(limit)
+        return self._parse(self._http.get("/reports/", params=params or None))
+
+    def get_report(self, report_id: str) -> dict:
+        return self._parse(self._http.get(f"/reports/{report_id}/"))
+
+    def set_report_status(
+        self, report_id: str, status: str, resolution_note: str | None = None
+    ) -> dict:
+        body: dict[str, Any] = {"status": status}
+        if resolution_note is not None:
+            body["resolution_note"] = resolution_note
+        return self._parse(self._http.patch(f"/reports/{report_id}/", json=body))
