@@ -99,51 +99,58 @@ EXPORT = {
 
 
 @respx.mock
-def test_add_question_does_not_import_when_validate_fails(monkeypatch):
+def test_add_question_posts_question_and_surfaces_validation_error(monkeypatch):
     _env(monkeypatch)
-    respx.get(f"{API}/tests/{TID}/export/").mock(return_value=Response(200, json=EXPORT))
-    respx.post(f"{API}/validate/").mock(
-        return_value=Response(200, json={"valid": False, "errors": [{"code": "INVALID_QUESTION_TYPE"}]})
-    )
     import_route = respx.post(f"{API}/import/")
+    create_route = respx.post(f"{API}/tests/{TID}/questions/").mock(
+        return_value=Response(
+            400,
+            json={"error": "VALIDATION_FAILED", "errors": [{"code": "INVALID_QUESTION_TYPE"}]},
+        )
+    )
     text = handle_add_question(
         TID,
         {"questionText": "Bad", "type": "true-false"},
     )
     body = json.loads(text)
-    assert body["valid"] is False
+    assert body["error"] == "VALIDATION_FAILED"
+    assert create_route.called
     assert not import_route.called
+    assert create_route.calls.last.request.headers["Authorization"] == "Token secret-token"
 
 
 @respx.mock
-def test_update_grading_imports_when_valid(monkeypatch):
+def test_update_grading_patches_question(monkeypatch):
     _env(monkeypatch)
-    respx.get(f"{API}/tests/{TID}/export/").mock(return_value=Response(200, json=EXPORT))
-    respx.post(f"{API}/validate/").mock(return_value=Response(200, json={"valid": True, "errors": []}))
-    import_route = respx.post(f"{API}/import/").mock(
-        return_value=Response(200, json={"applied": True, "quiz": EXPORT})
+    respx.get(f"{API}/tests/{TID}/questions/{QID}/").mock(
+        return_value=Response(200, json={"question_id": QID})
+    )
+    patch_route = respx.patch(f"{API}/questions/{QID}/").mock(
+        return_value=Response(
+            200,
+            json={"applied": True, "question": {"gradingCriteria": "Must mention 966", "maxPoints": 3}},
+        )
     )
     text = handle_update_grading(TID, QID, grading_criteria="Must mention 966", max_points=3)
     body = json.loads(text)
     assert body["applied"] is True
-    sent = json.loads(import_route.calls.last.request.content)
-    assert sent["test_id"] == TID
-    assert sent["questions"][0]["gradingCriteria"] == "Must mention 966"
-    assert sent["questions"][0]["maxPoints"] == 3
+    sent = json.loads(patch_route.calls.last.request.content)
+    assert sent == {"gradingCriteria": "Must mention 966", "maxPoints": 3}
 
 
 @respx.mock
 def test_delete_question_passes_dry_run(monkeypatch):
     _env(monkeypatch)
-    respx.get(f"{API}/tests/{TID}/export/").mock(return_value=Response(200, json=EXPORT))
-    respx.post(f"{API}/validate/").mock(return_value=Response(200, json={"valid": True, "errors": []}))
-    import_route = respx.post(f"{API}/import/").mock(
-        return_value=Response(200, json={"applied": False, "dry_run": True})
+    respx.get(f"{API}/tests/{TID}/questions/{QID}/").mock(
+        return_value=Response(200, json={"question_id": QID})
+    )
+    delete_route = respx.delete(f"{API}/questions/{QID}/").mock(
+        return_value=Response(200, json={"applied": False, "dry_run": True, "deleted": False})
     )
     text = handle_delete_question(TID, QID, dry_run=True)
     body = json.loads(text)
     assert body["dry_run"] is True
-    assert import_route.calls.last.request.url.params["dry_run"] == "true"
+    assert delete_route.calls.last.request.url.params["dry_run"] == "true"
 
 
 @respx.mock
@@ -159,20 +166,24 @@ def test_get_question_tool(monkeypatch):
 @respx.mock
 def test_update_question_tool(monkeypatch):
     _env(monkeypatch)
-    respx.get(f"{API}/tests/{TID}/export/").mock(return_value=Response(200, json=EXPORT))
-    respx.post(f"{API}/validate/").mock(return_value=Response(200, json={"valid": True, "errors": []}))
-    import_route = respx.post(f"{API}/import/").mock(
-        return_value=Response(200, json={"applied": True, "quiz": EXPORT})
+    respx.get(f"{API}/tests/{TID}/questions/{QID}/").mock(
+        return_value=Response(200, json={"question_id": QID})
+    )
+    patch_route = respx.patch(f"{API}/questions/{QID}/").mock(
+        return_value=Response(200, json={"applied": True, "question": {"questionText": "What year?"}})
     )
     text = handle_update_question(TID, QID, {"questionText": "What year?"})
     body = json.loads(text)
     assert body["applied"] is True
+    assert json.loads(patch_route.calls.last.request.content) == {"questionText": "What year?"}
 
 
 @respx.mock
 def test_compose_question_not_found(monkeypatch):
     _env(monkeypatch)
-    respx.get(f"{API}/tests/{TID}/export/").mock(return_value=Response(200, json=EXPORT))
+    respx.get(f"{API}/tests/{TID}/questions/missing-qid/").mock(
+        return_value=Response(404, json={"error": "QUESTION_NOT_FOUND", "message": "Question not found."})
+    )
     text = handle_delete_question(TID, "missing-qid")
     body = json.loads(text)
     assert body["error"] == "QUESTION_NOT_FOUND"

@@ -10,7 +10,6 @@ try:
 except ImportError:
     from mcp.server.mcpserver import MCPServer as FastMCP
 
-from quiz_authoring_mcp import compose
 from quiz_authoring_mcp.client import AuthoringAPIError, AuthoringClient
 
 mcp = FastMCP("quiz-authoring")
@@ -42,33 +41,6 @@ def _call(fn):
         )
     except KeyError as exc:
         return _dump({"error": "CONFIG", "message": f"Missing environment variable {exc}"})
-
-
-def _compose_and_save(test_id: str, mutator, dry_run: bool = False) -> str:
-    c = _client()
-    try:
-        doc = c.export_quiz(test_id)
-        try:
-            doc = mutator(doc)
-        except KeyError as exc:
-            return _dump({"error": "QUESTION_NOT_FOUND", "message": str(exc)})
-        report = c.validate_quiz(doc)
-        if not report.get("valid"):
-            return _dump(report)
-        return _dump(c.import_quiz(doc, test_id=test_id, dry_run=dry_run))
-    except AuthoringAPIError as exc:
-        body = exc.body if isinstance(exc.body, dict) else {"message": str(exc.body)}
-        return _dump(
-            {
-                "error": body.get("error", "HTTP_ERROR"),
-                "status_code": exc.status_code,
-                **body,
-            }
-        )
-    except KeyError as exc:
-        return _dump({"error": "CONFIG", "message": f"Missing environment variable {exc}"})
-    finally:
-        c.close()
 
 
 def handle_list_quizzes() -> str:
@@ -149,22 +121,46 @@ def handle_get_question(test_id: str, question_id: str) -> str:
     return _call(go)
 
 
+def _confirm_question(client: AuthoringClient, test_id: str, question_id: str) -> None:
+    """GET the question on this test so a foreign UUID is not patched or deleted."""
+    client.get_question(test_id, question_id)
+
+
 def handle_add_question(test_id: str, question: dict, dry_run: bool = False) -> str:
-    return _compose_and_save(test_id, lambda doc: compose.add_question(doc, question), dry_run)
+    def go():
+        c = _client()
+        try:
+            return c.create_question(test_id, question, dry_run=dry_run)
+        finally:
+            c.close()
+
+    return _call(go)
 
 
 def handle_update_question(
     test_id: str, question_id: str, question: dict, dry_run: bool = False
 ) -> str:
-    return _compose_and_save(
-        test_id, lambda doc: compose.update_question(doc, question_id, question), dry_run
-    )
+    def go():
+        c = _client()
+        try:
+            _confirm_question(c, test_id, question_id)
+            return c.patch_question(question_id, question, dry_run=dry_run)
+        finally:
+            c.close()
+
+    return _call(go)
 
 
 def handle_delete_question(test_id: str, question_id: str, dry_run: bool = False) -> str:
-    return _compose_and_save(
-        test_id, lambda doc: compose.delete_question(doc, question_id), dry_run
-    )
+    def go():
+        c = _client()
+        try:
+            _confirm_question(c, test_id, question_id)
+            return c.remove_question(question_id, dry_run=dry_run)
+        finally:
+            c.close()
+
+    return _call(go)
 
 
 def handle_update_grading(
@@ -174,11 +170,21 @@ def handle_update_grading(
     max_points: int | None = None,
     dry_run: bool = False,
 ) -> str:
-    return _compose_and_save(
-        test_id,
-        lambda doc: compose.update_grading(doc, question_id, grading_criteria, max_points),
-        dry_run,
-    )
+    fields: dict[str, Any] = {}
+    if grading_criteria is not None:
+        fields["gradingCriteria"] = grading_criteria
+    if max_points is not None:
+        fields["maxPoints"] = max_points
+
+    def go():
+        c = _client()
+        try:
+            _confirm_question(c, test_id, question_id)
+            return c.patch_question(question_id, fields, dry_run=dry_run)
+        finally:
+            c.close()
+
+    return _call(go)
 
 
 def handle_resource_schema() -> str:
@@ -262,7 +268,7 @@ def get_question(test_id: str, question_id: str) -> str:
 
 @mcp.tool()
 def add_question(test_id: str, question: dict, dry_run: bool = False) -> str:
-    """Append a question, validate, then import the full document. Does not import if validation fails."""
+    """Create one question on a test. Set dry_run=true to validate without writing."""
     return handle_add_question(test_id, question, dry_run)
 
 
@@ -270,13 +276,13 @@ def add_question(test_id: str, question: dict, dry_run: bool = False) -> str:
 def update_question(
     test_id: str, question_id: str, question: dict, dry_run: bool = False
 ) -> str:
-    """Merge fields into an existing question (by question_id), validate, import."""
+    """Merge fields into an existing question. The question must belong to test_id."""
     return handle_update_question(test_id, question_id, question, dry_run)
 
 
 @mcp.tool()
 def delete_question(test_id: str, question_id: str, dry_run: bool = False) -> str:
-    """Remove a question from the document and re-import. Questions with attempts may be blocked by the server."""
+    """Delete one question. The server refuses when the question has attempts."""
     return handle_delete_question(test_id, question_id, dry_run)
 
 
@@ -288,7 +294,7 @@ def update_grading(
     maxPoints: int | None = None,
     dry_run: bool = False,
 ) -> str:
-    """Patch gradingCriteria and/or maxPoints on an open question."""
+    """Patch gradingCriteria and/or maxPoints on one question."""
     return handle_update_grading(test_id, question_id, gradingCriteria, maxPoints, dry_run)
 
 
