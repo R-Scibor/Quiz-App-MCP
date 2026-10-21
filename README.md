@@ -96,15 +96,15 @@ An agent setting this up for someone should follow [AGENTS.md](AGENTS.md): ask w
 - `import_quiz(quiz, test_id=None, dry_run=False)`: Upsert a full quiz document. Supports dry-run preview.
 - `update_quiz_metadata(test_id, category=None, scope=None, version=None, description=None)`: Patch quiz metadata.
 
-### Question Mutation Tools (Compose)
-These tools fetch the latest quiz document, apply the change in-memory, validate the updated document, and import it:
+### Question tools
+These call the per-question authoring endpoints. `update_question`, `delete_question`, and `update_grading` first confirm the question belongs to `test_id`.
 - `get_question(test_id, question_id)`: Fetch a single question in interchange format.
-- `add_question(test_id, question, dry_run=False)`: Append a question, validate, and import.
-- `update_question(test_id, question_id, question, dry_run=False)`: Merge changes into an existing question, validate, and import.
-- `delete_question(test_id, question_id, dry_run=False)`: Remove a question from a quiz, validate, and import.
+- `add_question(test_id, question, dry_run=False)`: Create one question. Omitted `id` gets the next `source_id`.
+- `update_question(test_id, question_id, question, dry_run=False)`: Merge the given fields into that question.
+- `delete_question(test_id, question_id, dry_run=False)`: Delete one question. Questions with attempts come back as `DELETE_BLOCKED`.
 - `update_grading(test_id, question_id, gradingCriteria=None, maxPoints=None, dry_run=False)`: Patch grading criteria and max points.
 
-*Note: Question write tools currently use a compose loop (export -> patch -> validate -> import). Direct question-level PATCH endpoints may replace this in future versions.*
+`import_quiz` is still the way to replace a whole document.
 
 ## HTTP Transport & Docker
 
