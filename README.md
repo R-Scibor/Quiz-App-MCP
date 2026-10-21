@@ -6,23 +6,40 @@ An MCP (Model Context Protocol) server that enables AI agents to author, validat
 
 - Python 3.12+
 - A running Quiz-App instance with the authoring API enabled (`/api/v1/authoring/*`).
-- A Django user with staff privileges (`is_staff=True`) and a DRF Token.
+- A Django user with staff privileges (`is_staff=True`) and a DRF Token. A normal login token is rejected with `403 PERMISSION_DENIED`.
 
-### Setting up a Staff Token in Quiz-App
+## Install
 
-1. Create a superuser or staff user in Quiz-App:
-   ```bash
-   python manage.py createsuperuser
-   ```
-2. Generate an API token for the staff user in Django Admin or via the Django shell:
-   ```python
-   from django.contrib.auth import get_user_model
-   from rest_framework.authtoken.models import Token
-   User = get_user_model()
-   user = User.objects.get(username="<your-staff-username>")
-   token, _ = Token.objects.get_or_create(user=user)
-   print(token.key)
-   ```
+```bash
+git clone https://github.com/R-Scibor/Quiz-App-MCP.git
+cd Quiz-App-MCP
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+cp .env.example .env
+chmod +x run-stdio.sh
+```
+
+Edit `.env`. `QUIZ_APP_URL` is the Quiz-App origin with no trailing slash (`http://127.0.0.1:8050` when nginx publishes the app on that port). Put the staff token in `QUIZ_APP_TOKEN`.
+
+If this directory is moved, recreate the virtualenv. The console-script shebang keeps the old path and will not start.
+
+### Staff token
+
+Create a superuser, or mark an existing user `is_staff=True`, then issue a token:
+
+```bash
+python manage.py createsuperuser
+python manage.py shell -c "
+from django.contrib.auth import get_user_model
+from rest_framework.authtoken.models import Token
+User = get_user_model()
+user = User.objects.get(username='<staff-username>')
+token, _ = Token.objects.get_or_create(user=user)
+print(token.key)
+"
+```
+
+When Quiz-App runs in Docker, run those commands inside the web container (`docker exec -it django_web python manage.py …` in the homelab compose file). Write the key into `.env` and do not commit that file.
 
 ## Environment Variables
 
@@ -34,24 +51,36 @@ Configure environment variables (see `.env.example`):
 
 > **Security Note:** Never commit authentication tokens or environment files containing secrets.
 
-## MCP Client Configuration (stdio)
+## MCP client configuration (stdio)
 
-To configure an MCP client (such as Claude Desktop or Antigravity) to use this server over stdio:
+Point the client at `run-stdio.sh`. The script loads `.env` and execs the server, so the token stays out of client config.
+
+Grok, in `~/.grok/config.toml` (use the absolute path):
+
+```toml
+[mcp_servers.quiz-authoring]
+command = "/absolute/path/to/Quiz-App-MCP/run-stdio.sh"
+args = []
+enabled = true
+```
+
+Check it with `grok mcp doctor quiz-authoring`. A healthy server reports a handshake and 10 tools. Open a new Grok session after the first successful doctor run so that session attaches the server.
+
+Claude, Cursor, and other stdio clients:
 
 ```json
 {
   "mcpServers": {
     "quiz-authoring": {
-      "command": "quiz-authoring-mcp",
-      "env": {
-        "QUIZ_APP_URL": "https://localhost:8050",
-        "QUIZ_APP_TOKEN": "<staff-token>",
-        "QUIZ_APP_TIMEOUT_SECONDS": "30"
-      }
+      "command": "/absolute/path/to/Quiz-App-MCP/run-stdio.sh"
     }
   }
 }
 ```
+
+If a client cannot run the script, call `.venv/bin/quiz-authoring-mcp` and pass `QUIZ_APP_URL` and `QUIZ_APP_TOKEN` in that client's env block. Do not commit that config.
+
+An agent setting this up for someone should follow [AGENTS.md](AGENTS.md): ask whether to walk them through the commands or run the local steps, and never print the token.
 
 ## Available Tools and Resources
 
