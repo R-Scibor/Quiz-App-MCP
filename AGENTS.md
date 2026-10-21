@@ -53,4 +53,13 @@ Default to setting it up when they have already asked you to install it.
    enabled = true
    ```
 
-6. Prove it. `grok mcp doctor quiz-authoring` should show a handshake and 10 tools. Or, with `.env` loaded by the script, import `handle_list_quizzes` and report how many quizzes came back. A new Grok session picks up a server that failed at the start of the current one.
+6. Prove it. `grok mcp doctor quiz-authoring` should show a handshake and the tool list. Or, with `.env` loaded by the script, import `handle_list_quizzes` and report how many quizzes came back. A new Grok session picks up a server that failed at the start of the current one.
+
+## Triage a reported issue
+
+Use the host model. Do not call another LLM from the MCP.
+
+1. `list_reports` for status `NEW`.
+2. `get_report` for one id. Read the question, the learner's answer, and the description.
+3. If the question is wrong, `update_question` or `retire_question` on that `test_id` and `question_id`.
+4. `set_report_status` to `RESOLVED` or `REJECTED` with a short `resolution_note`. `IN_PROGRESS` is for a fix you have not finished.

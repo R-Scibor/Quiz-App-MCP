@@ -106,6 +106,15 @@ These call the per-question authoring endpoints. `update_question`, `delete_ques
 
 `import_quiz` is still the way to replace a whole document.
 
+### Finding, batching, and triage
+- `search_catalog(q, test_id=None, tag=None, limit=None)`: Find tests and questions. `q` must be at least 2 characters.
+- `add_questions(test_id, questions, dry_run=False)`: Insert many questions in one transaction.
+- `retire_question(test_id, question_id, retired=True)`: Hide a question from new sessions, or restore it.
+- `list_tags()`: Tag names already used, with counts.
+- `list_reports(status=None, limit=None)`: Reported issues. The server defaults to `NEW`.
+- `get_report(report_id)`: One report plus the question.
+- `set_report_status(report_id, status, resolution_note=None)`: Record a decision. This does not edit the question.
+
 ## HTTP Transport & Docker
 
 You can run the server with Streamable HTTP transport:
