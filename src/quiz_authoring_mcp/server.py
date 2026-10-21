@@ -187,6 +187,91 @@ def handle_update_grading(
     return _call(go)
 
 
+def handle_search_catalog(
+    q: str,
+    test_id: str | None = None,
+    tag: str | None = None,
+    limit: int | None = None,
+) -> str:
+    def go():
+        c = _client()
+        try:
+            return c.search_catalog(q, test_id=test_id, tag=tag, limit=limit)
+        finally:
+            c.close()
+
+    return _call(go)
+
+
+def handle_add_questions(test_id: str, questions: list, dry_run: bool = False) -> str:
+    def go():
+        c = _client()
+        try:
+            return c.add_questions(test_id, questions, dry_run=dry_run)
+        finally:
+            c.close()
+
+    return _call(go)
+
+
+def handle_retire_question(test_id: str, question_id: str, retired: bool = True) -> str:
+    def go():
+        c = _client()
+        try:
+            _confirm_question(c, test_id, question_id)
+            return c.patch_question(question_id, {"retired": retired})
+        finally:
+            c.close()
+
+    return _call(go)
+
+
+def handle_list_tags() -> str:
+    def go():
+        c = _client()
+        try:
+            return c.list_tags()
+        finally:
+            c.close()
+
+    return _call(go)
+
+
+def handle_list_reports(status: str | None = None, limit: int | None = None) -> str:
+    def go():
+        c = _client()
+        try:
+            return c.list_reports(status=status, limit=limit)
+        finally:
+            c.close()
+
+    return _call(go)
+
+
+def handle_get_report(report_id: str) -> str:
+    def go():
+        c = _client()
+        try:
+            return c.get_report(report_id)
+        finally:
+            c.close()
+
+    return _call(go)
+
+
+def handle_set_report_status(
+    report_id: str, status: str, resolution_note: str | None = None
+) -> str:
+    def go():
+        c = _client()
+        try:
+            return c.set_report_status(report_id, status, resolution_note=resolution_note)
+        finally:
+            c.close()
+
+    return _call(go)
+
+
 def handle_resource_schema() -> str:
     def go():
         c = _client()
@@ -296,6 +381,55 @@ def update_grading(
 ) -> str:
     """Patch gradingCriteria and/or maxPoints on one question."""
     return handle_update_grading(test_id, question_id, gradingCriteria, maxPoints, dry_run)
+
+
+@mcp.tool()
+def search_catalog(
+    q: str,
+    test_id: str | None = None,
+    tag: str | None = None,
+    limit: int | None = None,
+) -> str:
+    """Find tests and questions by scope, category, question text, or tag. q must be at least 2 characters."""
+    return handle_search_catalog(q, test_id=test_id, tag=tag, limit=limit)
+
+
+@mcp.tool()
+def add_questions(test_id: str, questions: list, dry_run: bool = False) -> str:
+    """Append questions in one transaction. A single invalid item writes nothing."""
+    return handle_add_questions(test_id, questions, dry_run)
+
+
+@mcp.tool()
+def retire_question(test_id: str, question_id: str, retired: bool = True) -> str:
+    """Hide a question from new sessions and the study queue, or restore it when retired is false."""
+    return handle_retire_question(test_id, question_id, retired)
+
+
+@mcp.tool()
+def list_tags() -> str:
+    """List tag names already used on at least one question, with counts."""
+    return handle_list_tags()
+
+
+@mcp.tool()
+def list_reports(status: str | None = None, limit: int | None = None) -> str:
+    """List reported issues. Defaults to status NEW on the server when status is omitted."""
+    return handle_list_reports(status=status, limit=limit)
+
+
+@mcp.tool()
+def get_report(report_id: str) -> str:
+    """Fetch one report plus the question in interchange shape."""
+    return handle_get_report(report_id)
+
+
+@mcp.tool()
+def set_report_status(
+    report_id: str, status: str, resolution_note: str | None = None
+) -> str:
+    """Set a report to IN_PROGRESS, RESOLVED, or REJECTED. Does not edit the question."""
+    return handle_set_report_status(report_id, status, resolution_note=resolution_note)
 
 
 @mcp.resource("quiz://schema")

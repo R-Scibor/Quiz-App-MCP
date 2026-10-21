@@ -6,6 +6,7 @@ from httpx import Response
 
 from quiz_authoring_mcp.server import (
     handle_add_question,
+    handle_add_questions,
     handle_delete_question,
     handle_export_quiz,
     handle_get_question,
@@ -13,6 +14,7 @@ from quiz_authoring_mcp.server import (
     handle_list_quizzes,
     handle_resource_instructions,
     handle_resource_schema,
+    handle_retire_question,
     handle_update_grading,
     handle_update_question,
     handle_validate_quiz,
@@ -187,3 +189,27 @@ def test_compose_question_not_found(monkeypatch):
     text = handle_delete_question(TID, "missing-qid")
     body = json.loads(text)
     assert body["error"] == "QUESTION_NOT_FOUND"
+
+
+@respx.mock
+def test_add_questions_does_not_import_on_400(monkeypatch):
+    _env(monkeypatch)
+    import_route = respx.post(f"{API}/import/")
+    respx.post(f"{API}/tests/{TID}/questions/batch/").mock(
+        return_value=Response(400, json={"error": "VALIDATION_FAILED", "errors": []})
+    )
+    body = json.loads(handle_add_questions(TID, [{"questionText": "Bad", "type": "nope"}]))
+    assert body["error"] == "VALIDATION_FAILED"
+    assert not import_route.called
+
+
+@respx.mock
+def test_retire_question_does_not_patch_when_missing(monkeypatch):
+    _env(monkeypatch)
+    respx.get(f"{API}/tests/{TID}/questions/missing-qid/").mock(
+        return_value=Response(404, json={"error": "QUESTION_NOT_FOUND", "message": "Question not found."})
+    )
+    patch = respx.patch(f"{API}/questions/missing-qid/")
+    body = json.loads(handle_retire_question(TID, "missing-qid", True))
+    assert body["error"] == "QUESTION_NOT_FOUND"
+    assert not patch.called
